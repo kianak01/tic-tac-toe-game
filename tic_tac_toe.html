@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tic-Tac-Toe</title>
+  <style>
+    :root { --bg:#0f172a; --panel:#1e293b; --line:#475569; --x:#38bdf8; --o:#fb7185; --text:#f8fafc; --muted:#94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; padding:20px; color:var(--text); background:radial-gradient(circle at top,#1e3a5f,var(--bg) 55%); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
+    main { width:min(94vw,520px); padding:clamp(20px,5vw,38px); text-align:center; background:rgba(30,41,59,.93); border:1px solid rgba(255,255,255,.1); border-radius:28px; box-shadow:0 24px 70px rgba(0,0,0,.38); }
+    h1 { margin:0 0 5px; font-size:clamp(2rem,8vw,3.2rem); letter-spacing:-2px; }
+    .tagline { margin:0 0 22px; color:var(--muted); }
+    .controls { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-bottom:18px; }
+    select, .action { border:1px solid var(--line); border-radius:12px; padding:10px 13px; color:var(--text); background:#0f172a; font:inherit; cursor:pointer; }
+    .scoreboard { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:18px; }
+    .score { padding:10px 5px; background:#0f172a; border-radius:13px; color:var(--muted); }
+    .score strong { display:block; color:var(--text); font-size:1.35rem; }
+    #status { min-height:30px; margin:4px 0 14px; font-size:1.15rem; font-weight:700; }
+    .xtext { color:var(--x); } .otext { color:var(--o); }
+    #board { width:min(78vw,390px); aspect-ratio:1; display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:auto; }
+    .cell { border:1px solid var(--line); border-radius:18px; background:#0f172a; color:var(--text); font-size:clamp(3rem,15vw,5.7rem); font-weight:800; line-height:1; cursor:pointer; transition:transform .12s,background .12s,border-color .12s; }
+    .cell:hover:not(:disabled) { transform:translateY(-2px); background:#172554; border-color:#60a5fa; }
+    .cell:disabled { cursor:default; }
+    .cell.x { color:var(--x); } .cell.o { color:var(--o); }
+    .cell.win { animation:pulse .7s infinite alternate; background:#334155; border-color:#facc15; }
+    @keyframes pulse { to { transform:scale(1.045); box-shadow:0 0 22px rgba(250,204,21,.4); } }
+    .buttons { display:flex; justify-content:center; gap:10px; margin-top:22px; }
+    .primary { border:0; background:linear-gradient(135deg,#0ea5e9,#2563eb); font-weight:700; }
+    .action:focus-visible,.cell:focus-visible,select:focus-visible { outline:3px solid #facc15; outline-offset:3px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Tic-Tac-Toe</h1>
+  <p class="tagline">Three in a row wins!</p>
+  <div class="controls">
+    <label>Mode <select id="mode"><option value="computer">Play Computer</option><option value="human">2 Players</option></select></label>
+    <label id="difficultyLabel">Level <select id="difficulty"><option value="easy">Easy</option><option value="hard">Hard</option></select></label>
+  </div>
+  <div class="scoreboard">
+    <div class="score"><span id="xLabel">You (X)</span><strong id="xScore">0</strong></div>
+    <div class="score">Draws<strong id="drawScore">0</strong></div>
+    <div class="score"><span id="oLabel">Computer (O)</span><strong id="oScore">0</strong></div>
+  </div>
+  <div id="status" aria-live="polite">Your turn — you are <span class="xtext">X</span></div>
+  <div id="board" role="grid" aria-label="Tic-Tac-Toe board"></div>
+  <div class="buttons">
+    <button class="action primary" id="newRound">New Round</button>
+    <button class="action" id="resetScore">Reset Score</button>
+  </div>
+</main>
+<script>
+  const wins=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  const boardEl=document.querySelector('#board'), statusEl=document.querySelector('#status');
+  const modeEl=document.querySelector('#mode'), difficultyEl=document.querySelector('#difficulty');
+  let board,turn,over,scores={X:0,O:0,D:0},computerBusy=false;
+
+  for(let i=0;i<9;i++){
+    const b=document.createElement('button'); b.className='cell'; b.dataset.index=i;
+    b.setAttribute('role','gridcell'); b.setAttribute('aria-label',`Square ${i+1}`);
+    b.addEventListener('click',()=>play(i)); boardEl.appendChild(b);
+  }
+
+  function newRound(){
+    board=Array(9).fill(''); turn='X'; over=false; computerBusy=false;
+    [...boardEl.children].forEach((b,i)=>{b.textContent='';b.className='cell';b.disabled=false;b.setAttribute('aria-label',`Square ${i+1}, empty`)});
+    say(modeEl.value==='computer'?'Your turn — you are <span class="xtext">X</span>':'Player <span class="xtext">X</span>\'s turn');
+  }
+  function play(i){
+    if(over||board[i]||computerBusy)return;
+    move(i,turn);
+    if(!over&&modeEl.value==='computer'&&turn==='O'){
+      computerBusy=true; say('Computer is thinking…');
+      setTimeout(()=>{ if(!over){ move(computerMove(),'O'); } computerBusy=false; },350);
+    }
+  }
+  function move(i,p){
+    board[i]=p; const cell=boardEl.children[i]; cell.textContent=p; cell.classList.add(p.toLowerCase()); cell.disabled=true; cell.setAttribute('aria-label',`Square ${i+1}, ${p}`);
+    const win=wins.find(line=>line.every(n=>board[n]===p));
+    if(win){ over=true; win.forEach(n=>boardEl.children[n].classList.add('win')); disableBoard(); scores[p]++; updateScore(); say(modeEl.value==='computer'?(p==='X'?'You win! 🎉':'Computer wins!'):`Player <span class="${p.toLowerCase()}text">${p}</span> wins! 🎉`); return; }
+    if(board.every(Boolean)){ over=true; scores.D++; updateScore(); say('It’s a draw!'); return; }
+    turn=p==='X'?'O':'X';
+    say(modeEl.value==='computer'?(turn==='X'?'Your turn — you are <span class="xtext">X</span>':'Computer’s turn'):`Player <span class="${turn.toLowerCase()}text">${turn}</span>\'s turn`);
+  }
+  function computerMove(){
+    const empty=board.map((v,i)=>v===''?i:null).filter(v=>v!==null);
+    if(difficultyEl.value==='easy') return empty[Math.floor(Math.random()*empty.length)];
+    return minimax(board.slice(),'O').index;
+  }
+  function minimax(state,player){
+    const empty=state.map((v,i)=>v===''?i:null).filter(v=>v!==null);
+    if(wins.some(w=>w.every(i=>state[i]==='X')))return{score:-10};
+    if(wins.some(w=>w.every(i=>state[i]==='O')))return{score:10};
+    if(!empty.length)return{score:0};
+    const moves=empty.map(index=>{state[index]=player;const result=minimax(state,player==='O'?'X':'O');state[index]='';return{index,score:result.score};});
+    return moves.reduce((best,m)=>player==='O'?(m.score>best.score?m:best):(m.score<best.score?m:best),moves[0]);
+  }
+  function disableBoard(){[...boardEl.children].forEach(b=>b.disabled=true)}
+  function say(message){statusEl.innerHTML=message}
+  function updateScore(){document.querySelector('#xScore').textContent=scores.X;document.querySelector('#oScore').textContent=scores.O;document.querySelector('#drawScore').textContent=scores.D}
+  function updateMode(){
+    const cpu=modeEl.value==='computer'; document.querySelector('#difficultyLabel').hidden=!cpu;
+    document.querySelector('#xLabel').textContent=cpu?'You (X)':'Player X'; document.querySelector('#oLabel').textContent=cpu?'Computer (O)':'Player O';
+    scores={X:0,O:0,D:0};updateScore();newRound();
+  }
+  modeEl.addEventListener('change',updateMode); difficultyEl.addEventListener('change',newRound);
+  document.querySelector('#newRound').addEventListener('click',newRound);
+  document.querySelector('#resetScore').addEventListener('click',()=>{scores={X:0,O:0,D:0};updateScore();newRound()});
+  newRound();
+</script>
+</body>
+</html>
